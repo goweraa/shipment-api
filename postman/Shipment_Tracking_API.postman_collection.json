@@ -1,0 +1,430 @@
+{
+  "info": {
+    "name": "Shipment Tracking API",
+    "description": "A complete test collection for the Shipment Tracking API — a REST API simulating a supply chain visibility platform.\n\nCovers the full shipment lifecycle: create → update status → track events.\n\nRun the requests in order for an end-to-end workflow. The shipment ID captured after creation is automatically reused in all subsequent requests.\n\n**Auth:** All requests require the `X-API-Key` header. The demo key `demo-key-p44` is pre-configured in the collection variables.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "description": "Base URL of the running API. Change to your deployed URL if hosted remotely."
+    },
+    {
+      "key": "api_key",
+      "value": "demo-key-p44",
+      "description": "Demo API key. Also valid: test-key-001"
+    },
+    {
+      "key": "shipment_id",
+      "value": "",
+      "description": "Auto-populated after Create Shipment runs."
+    }
+  ],
+  "item": [
+    {
+      "name": "Health Check",
+      "item": [
+        {
+          "name": "GET / — Root",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/",
+            "description": "Confirms the API is running. Returns service name, version, and the demo API key."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response contains service info', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('service');",
+                  "    pm.expect(json).to.have.property('version');",
+                  "    pm.expect(json).to.have.property('demo_api_key');",
+                  "});",
+                  "",
+                  "pm.test('Response time is under 500ms', () => {",
+                  "    pm.expect(pm.response.responseTime).to.be.below(500);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Shipments",
+      "item": [
+        {
+          "name": "POST /shipments — Create Shipment",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/shipments",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pro_number\": \"PRO-987654\",\n  \"carrier_scac\": \"FXFE\",\n  \"carrier_name\": \"FedEx Freight\",\n  \"origin_city\": \"Chicago\",\n  \"origin_state\": \"IL\",\n  \"destination_city\": \"Indianapolis\",\n  \"destination_state\": \"IN\",\n  \"shipper_name\": \"Acme Corp\",\n  \"consignee_name\": \"Beta Warehouse\"\n}"
+            },
+            "description": "Creates a new shipment. The shipment ID returned is automatically saved to the `shipment_id` collection variable for use in all subsequent requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Response contains shipment_id', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json).to.have.property('shipment_id');",
+                  "    pm.collectionVariables.set('shipment_id', json.shipment_id);",
+                  "});",
+                  "",
+                  "pm.test('Initial status is Pending', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.current_status).to.eql('Pending');",
+                  "});",
+                  "",
+                  "pm.test('PRO number matches request', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.pro_number).to.eql('PRO-987654');",
+                  "});",
+                  "",
+                  "pm.test('Events array is empty on creation', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.events).to.be.an('array').that.is.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /shipments — List All Shipments",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/shipments",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" }
+            ],
+            "description": "Returns all shipments in the system with their current status and event history."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is an array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Array contains at least one shipment', () => {",
+                  "    pm.expect(pm.response.json().length).to.be.above(0);",
+                  "});",
+                  "",
+                  "pm.test('Each shipment has required fields', () => {",
+                  "    const shipments = pm.response.json();",
+                  "    shipments.forEach(s => {",
+                  "        pm.expect(s).to.have.all.keys(",
+                  "            'shipment_id', 'pro_number', 'carrier_scac', 'carrier_name',",
+                  "            'origin_city', 'origin_state', 'destination_city', 'destination_state',",
+                  "            'shipper_name', 'consignee_name', 'current_status', 'created_at',",
+                  "            'last_updated', 'events'",
+                  "        );",
+                  "    });",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /shipments/:id — Get Shipment by ID",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/shipments/{{shipment_id}}",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" }
+            ],
+            "description": "Returns full details for the shipment created in the previous request. Uses the `shipment_id` variable captured automatically."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Returned shipment ID matches request', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.shipment_id).to.eql(pm.collectionVariables.get('shipment_id'));",
+                  "});",
+                  "",
+                  "pm.test('Content-Type is application/json', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('application/json');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Events",
+      "item": [
+        {
+          "name": "POST /shipments/:id/events — Picked Up",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/shipments/{{shipment_id}}/events",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Picked Up\",\n  \"city\": \"Chicago\",\n  \"state\": \"IL\",\n  \"note\": \"Shipment picked up from shipper facility\"\n}"
+            },
+            "description": "Pushes the first carrier status event. Simulates the carrier collecting the freight at origin."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Event status is Picked Up', () => {",
+                  "    const json = pm.response.json();",
+                  "    pm.expect(json.status).to.eql('Picked Up');",
+                  "});",
+                  "",
+                  "pm.test('Event contains event_id', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('event_id');",
+                  "});",
+                  "",
+                  "pm.test('Event contains timestamp', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('timestamp');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /shipments/:id/events — In Transit",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/shipments/{{shipment_id}}/events",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"In Transit\",\n  \"city\": \"Gary\",\n  \"state\": \"IN\",\n  \"note\": \"Arrived at sorting facility\"\n}"
+            },
+            "description": "Simulates a mid-route carrier check-in at an intermediate facility."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Event status is In Transit', () => {",
+                  "    pm.expect(pm.response.json().status).to.eql('In Transit');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /shipments/:id/events — Delivered",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/shipments/{{shipment_id}}/events",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Delivered\",\n  \"city\": \"Indianapolis\",\n  \"state\": \"IN\",\n  \"note\": \"Delivered and signed for by consignee\"\n}"
+            },
+            "description": "Final delivery event. Completes the shipment lifecycle."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 201 Created', () => {",
+                  "    pm.response.to.have.status(201);",
+                  "});",
+                  "",
+                  "pm.test('Event status is Delivered', () => {",
+                  "    pm.expect(pm.response.json().status).to.eql('Delivered');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /shipments/:id/events — Event History",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/shipments/{{shipment_id}}/events",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" }
+            ],
+            "description": "Retrieves the full event history for the shipment. Expects 3 events after the previous requests."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 200', () => {",
+                  "    pm.response.to.have.status(200);",
+                  "});",
+                  "",
+                  "pm.test('Response is an array', () => {",
+                  "    pm.expect(pm.response.json()).to.be.an('array');",
+                  "});",
+                  "",
+                  "pm.test('Three events recorded', () => {",
+                  "    pm.expect(pm.response.json().length).to.eql(3);",
+                  "});",
+                  "",
+                  "pm.test('Events are in correct lifecycle order', () => {",
+                  "    const statuses = pm.response.json().map(e => e.status);",
+                  "    pm.expect(statuses[0]).to.eql('Picked Up');",
+                  "    pm.expect(statuses[1]).to.eql('In Transit');",
+                  "    pm.expect(statuses[2]).to.eql('Delivered');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Error Handling",
+      "item": [
+        {
+          "name": "401 — Invalid API Key",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/shipments",
+            "header": [
+              { "key": "X-API-Key", "value": "invalid-key-xyz" }
+            ],
+            "description": "Confirms the API rejects requests with an invalid API key and returns a 401 Unauthorized response."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 401 Unauthorized', () => {",
+                  "    pm.response.to.have.status(401);",
+                  "});",
+                  "",
+                  "pm.test('Error detail is present in response', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "404 — Shipment Not Found",
+          "request": {
+            "method": "GET",
+            "url": "{{base_url}}/shipments/00000000-0000-0000-0000-000000000000",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" }
+            ],
+            "description": "Confirms the API returns a 404 when requesting a shipment ID that does not exist."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 404 Not Found', () => {",
+                  "    pm.response.to.have.status(404);",
+                  "});",
+                  "",
+                  "pm.test('Error detail is present in response', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "422 — Invalid Request Body",
+          "request": {
+            "method": "POST",
+            "url": "{{base_url}}/shipments",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"pro_number\": \"PRO-000\"\n}"
+            },
+            "description": "Sends an incomplete request body. Confirms the API returns a 422 Unprocessable Entity with field-level validation errors."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status code is 422 Unprocessable Entity', () => {",
+                  "    pm.response.to.have.status(422);",
+                  "});",
+                  "",
+                  "pm.test('Response contains validation detail', () => {",
+                  "    pm.expect(pm.response.json()).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
